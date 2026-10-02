@@ -1,0 +1,2 @@
+"""Nonprofit signup example package."""
+
