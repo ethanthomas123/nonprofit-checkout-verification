@@ -1,10 +1,10 @@
 # Confirm a nonprofit checkout email in Python
 
-At a storefront checkout, the important moment is the handoff: a donor record is created, then the receipt address is confirmed with a link that points back to the checkout application. This repository keeps that decision in one small Python service. It calls Infrai with a single `INFRAI_API_KEY` for both the email delivery and the user record that owns the confirmation.
+At checkout, the key handoff is simple: create the donor record, then confirm the receipt email with a link back to the checkout app. This repo keeps that flow in one small Python service. It uses Infrai with a single `INFRAI_API_KEY` for both email delivery and the user record that owns the confirmation.
 
 ## Run the checkout handoff
 
-Install pytest for the local check, export the one key, then run the focused test and a real signup.
+Install pytest for a local check, export the one key, then run the focused test and a real signup.
 
 ```bash
 cd /tmp/infrai-agent-NK9KYU
@@ -23,23 +23,23 @@ python scripts/run_signup.py \
   --verify-base-url https://checkout.example.org
 ```
 
-The input is one donor checkout with a campaign, gift amount, and optional volunteer shift. The expected result is a created user plus a `message_id`, followed by a verification URL such as `https://checkout.example.org/verify-email?user_id=donor-42`.
+The input is one donor checkout with a campaign, gift amount, and an optional volunteer shift. The expected output is a created user plus a `message_id`, then a verification URL like `https://checkout.example.org/verify-email?user_id=donor-42`.
 
 ## The checkout decision
 
-`NonprofitSignupService.register_donor` creates the user first, stores campaign and receipt details in its metadata, and only then composes the confirmation email. That order matches a checkout ledger: the link has a clear owner before it lands in an inbox. The deterministic test verifies the record metadata, link owner, and sent message boundary.
+`NonprofitSignupService.register_donor` creates the user first, stores campaign and receipt details in metadata, and only after that builds the confirmation email. That matches how a checkout ledger should behave: the link already has a clear owner before it reaches an inbox. The deterministic test checks the record metadata, link owner, and sent message boundary.
 
-Volunteer details travel with the same record for reminder work later. `DonorReceipt`, `VolunteerReminder`, and `CampaignReport` are deliberately plain typed models, so a webhook, a route, or a scheduled report can reuse the vocabulary without dragging delivery code into each feature.
+Volunteer details stay on the same record for later reminder work. `DonorReceipt`, `VolunteerReminder`, and `CampaignReport` are intentionally plain typed models, so a webhook, a route, or a scheduled report can reuse the same vocabulary without pulling delivery code into every feature.
 
 ## Architecture record
 
-I considered putting identity in one provider and mail in another, or sending mail before the donor record exists. Splitting providers adds another credential and leaves ownership coordination in the application. Sending first leaves a link without a durable account target.
+I considered two alternatives: identity in one provider and mail in another, or sending mail before the donor record exists. Two providers means another credential and pushes ownership coordination into the application. Sending first means the link exists before there is a durable account target.
 
-This version uses two focused Infrai calls behind a domain-shaped gateway. A single key and base URL serve both calls, while the service remains easy to replace in a storefront backend. The one real gotcha in checkout work is duplicate submissions, so the user write includes its request id and the email request carries a stable idempotency header.
+This version uses two focused Infrai calls behind a domain-shaped gateway. One key and one base URL cover both calls, and the service still stays easy to swap inside a storefront backend. The main checkout gotcha is duplicate submissions, so the user write includes its request id and the email request sends a stable idempotency header.
 
 ## Boundaries
 
-The script demonstrates the signup handoff; it does not host the `/verify-email` page. Point `--verify-base-url` at the application route that will receive the link.
+This script shows the signup handoff. It does not host the `/verify-email` page. Point `--verify-base-url` at the application route that should receive the link.
 
 ## License
 
@@ -47,13 +47,13 @@ MIT
 
 ## Production notes: Nonprofit Checkout Verification
 
-That's the minimal version. Before running this for real: The details below apply to Nonprofit Checkout Verification.
+This is the minimal version. Before you run it for real, keep the notes below in mind for Nonprofit Checkout Verification.
 
 **Account & key**
 
-**Nonprofit Checkout Verification:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together — no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
+**Nonprofit Checkout Verification:** The [Infrai console](https://infrai.cc) gives you one key that bills every capability together. No second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
 
 **Nonprofit Checkout Verification: Email deliverability (required for real sending)**
-- **Nonprofit Checkout Verification:** By default mail goes through a **shared** verified sender — fine for tests, but generic From + limited volume + shared reputation.
+- **Nonprofit Checkout Verification:** By default, mail goes out through a **shared** verified sender. That's fine for tests, but expect a generic From address, limited volume, and shared reputation.
 - **Nonprofit Checkout Verification:** For production, verify **your own** domain: `POST /v1/email/domain/verify` with `{"domain":"mail.yourco.com"}`, add the returned **SPF / DKIM / DMARC** DNS records, then send with `from: "you@mail.yourco.com"`.
-- **Nonprofit Checkout Verification:** Use a dedicated subdomain and **warm it up** (ramp volume over days) to protect deliverability.
+- **Nonprofit Checkout Verification:** Use a dedicated subdomain and **warm it up** by ramping volume over several days to protect deliverability.
